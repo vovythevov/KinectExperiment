@@ -1,7 +1,10 @@
- #include <NuiApi.h>
- #include <windows.h>
- 
- #include <iostream>
+#include <windows.h> // WINDOWS MUST BE BEFORE !
+
+// -- Kinect --
+#include <NuiApi.h>
+
+// -- STD --
+#include <iostream>
  
  int main (int argc, char* argv)
  {
