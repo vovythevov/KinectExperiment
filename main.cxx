@@ -51,7 +51,7 @@ bool OpenStream()
 
   // Open Stream
   return sensor->NuiImageStreamOpen(
-    NUI_IMAGE_TYPE_DEPTH, //hmm I guess
+    NUI_IMAGE_TYPE_COLOR, //hmm I guess
     NUI_IMAGE_RESOLUTION_640x480, // resolution
     NUI_IMAGE_DEPTH_NO_VALUE, // looks like this controls how far you want to see
     2, // The doc says "Most application should use 2"
@@ -60,11 +60,11 @@ bool OpenStream()
 }
 
 //-----------------------------------------------------------------------------
- void GrabNextFrame(int numberOfTry, vtkImageData* image)
+ vtkImageData* GrabNextFrame(int numberOfTry)
 {
   if (!sensor)
     {
-    return;
+    return 0;
     }
 
   // Grab frame
@@ -76,7 +76,7 @@ bool OpenStream()
     if (result == EXIT_FAILURE)
       {
       std::cout<<"Could not grab frame ! Error "<<result<<std::endl;
-      return;
+      return 0;
       }
 
     --numberOfTry;
@@ -87,19 +87,38 @@ bool OpenStream()
   NUI_LOCKED_RECT lockedRect;
   texture->LockRect(0, &lockedRect, NULL, 0);
 
-  int width = 640;
+  int width = 640; // resolution could be deduced from kinect frame
   int height = 480;
 
-  vtkNew<vtkImageImport> importer;
-  importer->SetDataExtent(0, width, 0, height, 0, 0);
-  importer->SetWholeExtent(0, width, 0, height, 0, 0);
-  importer->SetImportVoidPointer(lockedRect.pBits);
-  importer->Update();
+  std::cout<<"Image Dimension: "
+    <<"Number of bytes in a row: "<<lockedRect.Pitch<<std::endl
+    <<"Size of PBytes: "<<lockedRect.size<<std::endl;
 
-  image->DeepCopy(importer->GetOutput());
+  vtkImageData* image = vtkImageData::New();
+  image->SetDimensions(height, width, 1);
+  image->AllocateScalars(VTK_UNSIGNED_CHAR, 3);
+
+  const BYTE* kinectImage = const_cast<const BYTE*>(lockedRect.pBits);
+  for (unsigned int x = 0; x < height; ++x)
+    {
+    for (unsigned int y = 0; y < width; ++y)
+      {
+      unsigned char* pixel =
+        static_cast<unsigned char*>(image->GetScalarPointer(x,y,0));
+      for (int rgb = 0; rgb < 3; ++rgb)
+        {
+        pixel[rgb] = *kinectImage;
+        ++kinectImage;
+        }
+
+      kinectImage += VTK_SIZEOF_CHAR;
+      }
+    }
 
   texture->UnlockRect(0);
   sensor->NuiImageStreamReleaseFrame(rgbStream, &kinectFrame);
+
+  return image;
 }
 
 
@@ -152,14 +171,18 @@ bool OpenStream()
   //renderer->AddViewProp(imageActor);
   renderer->AddActor2D(imageActor);
 
+  vtkNew<vtkImageImport> importer;
+
+  vtkNew<vtkImageWriter> w;
+  w->SetInputData(GrabNextFrame(100));
+  w->SetFileName("./frame.png");
+  w->Update();
+
   bool capture = true;
   while (capture)
     {
-    vtkSmartPointer<vtkImageData> image = vtkSmartPointer<vtkImageData>::New();
-    GrabNextFrame(100, image);
+    imageMapper->SetInputData( GrabNextFrame(100) );
 
-    imageMapper->SetInputData( image );
- 
     renderWindow->Render();
     }
 
