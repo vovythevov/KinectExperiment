@@ -9,8 +9,10 @@
 // -- VTK --
 #include <vtkActor2D.h>
 #include <vtkImageData.h>
+#include <vtkImageFlip.h>
 #include <vtkImageImport.h>
 #include <vtkImageMapper.h>
+#include <vtkImageReslice.h>
 #include <vtkImageWriter.h>
 #include <vtkNew.h>
 #include <vtkRenderer.h>
@@ -60,7 +62,7 @@ bool OpenStream()
 }
 
 //-----------------------------------------------------------------------------
- vtkImageData* GrabNextFrame(int numberOfTry)
+vtkImageData* GrabNextFrame(int numberOfTry)
 {
   if (!sensor)
     {
@@ -72,7 +74,7 @@ bool OpenStream()
   HRESULT result = E_NUI_FRAME_NO_DATA;
   while (numberOfTry >= 0 && result != EXIT_SUCCESS)
     {
-    HRESULT result = sensor->NuiImageStreamGetNextFrame(rgbStream, 10, &kinectFrame);
+    HRESULT result = sensor->NuiImageStreamGetNextFrame(rgbStream, 0, &kinectFrame);
     if (result == EXIT_FAILURE)
       {
       std::cout<<"Could not grab frame ! Error "<<result<<std::endl;
@@ -80,28 +82,28 @@ bool OpenStream()
       }
 
     --numberOfTry;
-    Sleep(10);
+    Sleep(1);
     }
 
   INuiFrameTexture* texture = kinectFrame.pFrameTexture;
   NUI_LOCKED_RECT lockedRect;
   texture->LockRect(0, &lockedRect, NULL, 0);
 
-  int width = 640; // resolution could be deduced from kinect frame
-  int height = 480;
+  unsigned int width = 640; // resolution could be deduced from kinect frame
+  unsigned int height = 480;
 
-  std::cout<<"Image Dimension: "
+  /*std::cout<<"Image Dimension: "
     <<"Number of bytes in a row: "<<lockedRect.Pitch<<std::endl
-    <<"Size of PBytes: "<<lockedRect.size<<std::endl;
+    <<"Size of PBytes: "<<lockedRect.size<<std::endl;*/
 
   vtkImageData* image = vtkImageData::New();
-  image->SetDimensions(height, width, 1);
+  image->SetDimensions(width, height, 1);
   image->AllocateScalars(VTK_UNSIGNED_CHAR, 3);
 
   const BYTE* kinectImage = const_cast<const BYTE*>(lockedRect.pBits);
-  for (unsigned int x = 0; x < height; ++x)
+  for (unsigned int y = 0; y < height; ++y)
     {
-    for (unsigned int y = 0; y < width; ++y)
+    for (unsigned int x = 0; x < width; ++x)
       {
       unsigned char* pixel =
         static_cast<unsigned char*>(image->GetScalarPointer(x,y,0));
@@ -167,21 +169,20 @@ bool OpenStream()
   // Setup render window
   vtkSmartPointer<vtkRenderWindow> renderWindow = vtkSmartPointer<vtkRenderWindow>::New();
   renderWindow->AddRenderer(renderer);
- 
+  renderWindow->SetSize(640, 480);
+
   //renderer->AddViewProp(imageActor);
   renderer->AddActor2D(imageActor);
 
-  vtkNew<vtkImageImport> importer;
-
-  vtkNew<vtkImageWriter> w;
-  w->SetInputData(GrabNextFrame(100));
-  w->SetFileName("./frame.png");
-  w->Update();
+  vtkNew<vtkImageFlip> flip;
+  flip->SetFilteredAxis(1);
 
   bool capture = true;
   while (capture)
     {
-    imageMapper->SetInputData( GrabNextFrame(100) );
+    flip->SetInputData(GrabNextFrame(100));
+    flip->Update();
+    imageMapper->SetInputData(flip->GetOutput());
 
     renderWindow->Render();
     }
