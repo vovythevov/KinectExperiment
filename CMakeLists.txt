@@ -30,10 +30,18 @@ include_directories(
   ${PROJECT_BINARY_DIR}
   ${KINECT_INCLUDE_DIRS}
   ${VTK_INCLUDE_DIR}
-  ${BENDER_INCLUDE_DIR})
+  ./Libs/VTK/Widgets
+  ./Libs/VTK/Filters/Sources
+  ./Libs/VTK/Common
+  
+  ${PROJECT_BINARY_DIR}/Libs/VTK/Widgets
+  ${PROJECT_BINARY_DIR}/Libs/VTK/Filters/Sources
+  ${PROJECT_BINARY_DIR}/Libs/VTK/Common)
+  
+message("a ${BENDER_LIBRARIES}")
 
 # Kinect Lib
 set(KINECT_LIB ${KINECT_DIR}/lib/x86/Kinect10.lib) #32 bit windows
 
 add_executable(K main.cxx)
-target_link_libraries(K ${KINECT_LIB} ${VTK_LIBRARIES} ${BENDER_LIBRARIES})
+target_link_libraries(K ${KINECT_LIB} ${VTK_LIBRARIES} vtkBenderSources vtkBenderWidgets)

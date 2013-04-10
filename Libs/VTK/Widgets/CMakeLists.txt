@@ -82,3 +82,7 @@ configure_file(
   ${Bender_SOURCE_DIR}/CMake/BenderExport.h.in
   ${PROJECT_NAME}Export.h
   )
+  
+set(dynamicHeaders
+  "${dynamicHeaders};${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}Export.h")
+
