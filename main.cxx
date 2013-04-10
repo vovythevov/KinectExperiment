@@ -19,20 +19,29 @@
 #include <vtkRenderWindow.h>
 #include <vtkSmartPointer.h>
 
+// Places from where I glanced/used/copy some code from:
+// http://www.cs.princeton.edu/~edwardz/tutorials/kinect/kinect1.html
+// http://code.google.com/p/visual-experiments/source/browse/trunk/Demos/?r=45#Demos%2FOgreKinect%253Fstate%253Dclosed
+// http://www.google.com/url?sa=t&rct=j&q=&esrc=s&source=web&cd=1&ved=0CC8QFjAA&url=http%3A%2F%2Fdownload.microsoft.com%2Fdownload%2FF%2F9%2F9%2FF99791F2-D5BE-478A-B77A-830AD14950C3%2FSkeletalViewer_Walkthrough.pdf&ei=OqdkUcLLBYGaqQHogIGACw&usg=AFQjCNFwPBiIHqCPoI7MgCarD3FUIfZXLQ&sig2=aml8RU0vnvlbJiUHLu2oxA&bvm=bv.44990110,d.aWM&cad=rja
+
 //-----------------------------------------------------------------------------
 // STATIC Variables
 
 // Picture size
-unsigned int width = 640; // resolution could be deduced from kinect frame
-unsigned int height = 480;
+unsigned int ColorWidth = 640; // resolution could be deduced from kinect frame
+unsigned int ColorHeight = 480;
+
+unsigned int DepthWidth = 320; // resolution could be deduced from kinect frame
+unsigned int DepthHeight = 240;
+
 
 // Kinect variables
 HANDLE rgbStream;              // The identifier of the Kinect's RGB Camera
-//HANDLE depthStream;            // The identifier of the Kinect's depth Camera
+HANDLE depthStream;            // The identifier of the Kinect's depth Camera
 INuiSensor* sensor;            // The kinect sensor
 
 //-----------------------------------------------------------------------------
-bool InitKinect() // source: http://www.cs.princeton.edu/~edwardz/tutorials/kinect/kinect1.html
+bool InitKinect()
 {
   // Get a working kinect sensor
   int numSensors;
@@ -46,7 +55,7 @@ bool InitKinect() // source: http://www.cs.princeton.edu/~edwardz/tutorials/kine
     }
 
   // Initialize sensor
-  sensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_DEPTH | NUI_INITIALIZE_FLAG_USES_COLOR);
+  sensor->NuiInitialize(NUI_INITIALIZE_FLAG_USES_DEPTH_AND_PLAYER_INDEX | NUI_INITIALIZE_FLAG_USES_COLOR);
   return sensor;
 }
 
@@ -64,41 +73,34 @@ bool OpenColorStream(HANDLE readyEvent)
     NUI_IMAGE_RESOLUTION_640x480, // resolution
     NUI_IMAGE_DEPTH_NO_VALUE, // looks like this controls how far you want to see
     2, // The doc says "Most application should use 2"
-    readyEvent,  // Next frame event. Maybe I could grab this ???
+    readyEvent,
     &rgbStream) == EXIT_SUCCESS;
 }
 
 //-----------------------------------------------------------------------------
-bool GrabNextFrame(HANDLE handle, int numberOfTry, NUI_IMAGE_FRAME& kinectFrame)
+bool OpenDepthStream(HANDLE readyEvent)
 {
   if (!sensor)
     {
     return false;
     }
 
-  // Grab frame
-  HRESULT result = E_NUI_FRAME_NO_DATA;
-  while (numberOfTry >= 0 && result != EXIT_SUCCESS)
-    {
-    HRESULT result = sensor->NuiImageStreamGetNextFrame(handle, 0, &kinectFrame);
-    if (result == EXIT_FAILURE)
-      {
-      std::cout<<"Could not grab frame ! Error "<<result<<std::endl;
-      return false;
-      }
-
-    --numberOfTry;
-    Sleep(1);
-    }
-
-  return true;
+  // Open Stream
+  return sensor->NuiImageStreamOpen(
+    NUI_IMAGE_TYPE_DEPTH_AND_PLAYER_INDEX, //hmm I guess
+   NUI_IMAGE_RESOLUTION_320x240, // resolution, maybe smaller ?
+    NUI_IMAGE_DEPTH_NO_VALUE, // looks like this controls how far you want to see
+    2, // The doc says "Most application should use 2"
+    readyEvent,
+    &depthStream) == EXIT_SUCCESS;
 }
 
+
 //-----------------------------------------------------------------------------
-vtkImageData* GrabNextColorFrame(int numberOfTry)
+vtkImageData* GrabNextColorFrame()
 {
   NUI_IMAGE_FRAME kinectFrame;
-  if (! GrabNextFrame(rgbStream, numberOfTry, kinectFrame))
+  if (sensor->NuiImageStreamGetNextFrame(rgbStream, 0, &kinectFrame) != EXIT_SUCCESS)
     {
     return 0;
     }
@@ -111,14 +113,16 @@ vtkImageData* GrabNextColorFrame(int numberOfTry)
     <<"Number of bytes in a row: "<<lockedRect.Pitch<<std::endl
     <<"Size of PBytes: "<<lockedRect.size<<std::endl;*/
 
+  // Color image is 32-bits-per-pixel RGB
+
   vtkImageData* image = vtkImageData::New();
-  image->SetDimensions(width, height, 1);
+  image->SetDimensions(ColorWidth, ColorHeight, 1);
   image->AllocateScalars(VTK_UNSIGNED_CHAR, 3);
 
   const BYTE* kinectImage = const_cast<const BYTE*>(lockedRect.pBits);
-  for (unsigned int y = 0; y < height; ++y)
+  for (unsigned int y = 0; y < ColorHeight; ++y)
     {
-    for (unsigned int x = 0; x < width; ++x)
+    for (unsigned int x = 0; x < ColorWidth; ++x)
       {
       unsigned char* pixel =
         static_cast<unsigned char*>(image->GetScalarPointer(x,y,0));
@@ -139,6 +143,106 @@ vtkImageData* GrabNextColorFrame(int numberOfTry)
 }
 
 //-----------------------------------------------------------------------------
+vtkImageData* GrabNextDepthFrame()
+{
+  NUI_IMAGE_FRAME kinectFrame;
+  if (sensor->NuiImageStreamGetNextFrame(depthStream, 0, &kinectFrame) != EXIT_SUCCESS)
+    {
+    return 0;
+    }
+
+  INuiFrameTexture* texture = kinectFrame.pFrameTexture;
+  NUI_LOCKED_RECT lockedRect;
+  texture->LockRect(0, &lockedRect, NULL, 0);
+
+  /*std::cout<<"Image Dimension: "
+    <<"Number of bytes in a row: "<<lockedRect.Pitch<<std::endl
+    <<"Size of PBytes: "<<lockedRect.size<<std::endl;*/
+
+  // Depth image is 16-bit value in which the low-order 12 bits (bits 0–11)
+  // contain the depth value in millimeters
+
+  vtkImageData* image = vtkImageData::New();
+  image->SetDimensions(DepthWidth, DepthHeight, 1);
+  image->AllocateScalars(VTK_UNSIGNED_CHAR, 3);
+
+  const short* kinectImage = reinterpret_cast<short*>(lockedRect.pBits);
+  for (unsigned int y = 0; y < DepthHeight; ++y)
+    {
+    for (unsigned int x = 0; x < DepthWidth; ++x)
+      {
+      unsigned char* pixel =
+        static_cast<unsigned char*>(image->GetScalarPointer(x,y,0));
+
+      short depth = *kinectImage;
+      short realDepth = (depth & 0xfff8) >> 3;
+      short player = depth & 7;
+      char scale = 255 - (BYTE)(256 * realDepth / 0x0fff);
+
+      switch (player)
+        {
+        case 0:
+          {
+          pixel[0] = scale / 2;
+          pixel[1] = scale / 2;
+          pixel[2] = scale / 2;
+          break;
+          }
+        case 1:
+          {
+          pixel[0] = scale;
+          break;
+          }
+        case 2:
+          {
+          pixel[1] = scale;
+          break;
+          }
+        case 3:
+          {
+          pixel[2] = scale;
+          break;
+          }
+        case 4:
+          {
+          pixel[0] = scale;
+          pixel[1] = scale;
+          break;
+          }
+        case 5:
+          {
+          pixel[0] = scale;
+          pixel[2] = scale;
+          break;
+          }
+        case 6:
+          {
+          pixel[1] = scale;
+          pixel[2] = scale;
+          break;
+          }
+        case 7:
+          {
+          pixel[0] = 255 - scale / 2;
+          pixel[1] = 255 - scale / 2;
+          pixel[2] = 255 - scale / 2;
+          break;
+          }
+        }
+
+      ++kinectImage;
+      }
+    }
+
+
+  texture->UnlockRect(0);
+  sensor->NuiImageStreamReleaseFrame(depthStream, &kinectFrame);
+
+  return image;
+}
+
+
+//-----------------------------------------------------------------------------
  int main (int argc, char* argv)
  {
   // 1- init
@@ -149,12 +253,21 @@ vtkImageData* GrabNextColorFrame(int numberOfTry)
     }
 
   // 2- Create Events
+  const int numberOfEvents = 2;
   HANDLE nextColorFrameEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+  HANDLE nextDepthFrameEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+  HANDLE events[numberOfEvents] = {nextColorFrameEvent, nextDepthFrameEvent};
 
-  // 2 - Open RGB stream
+  // 3- Open RGB stream
   if (!OpenColorStream(nextColorFrameEvent))
     {
     std::cout<<"Could not Init Color Stream"<<std::endl;
+    return EXIT_FAILURE;
+    }
+
+  if (!OpenDepthStream(nextDepthFrameEvent))
+    {
+    std::cout<<"Could not Init depth Stream"<<std::endl;
     return EXIT_FAILURE;
     }
 
@@ -171,12 +284,14 @@ vtkImageData* GrabNextColorFrame(int numberOfTry)
   colorImageActor->SetPosition(0,0);
 
   // 2 -Depth
-  //vtkSmartPointer<vtkImageMapper> depthImageMapper =
-  //  vtkSmartPointer<vtkImageMapper>::New();
+  vtkSmartPointer<vtkImageMapper> depthImageMapper =
+    vtkSmartPointer<vtkImageMapper>::New();
+  depthImageMapper->SetColorWindow(255);
+  depthImageMapper->SetColorLevel(127.5);
 
-  //vtkSmartPointer<vtkActor2D> depthImageActor = vtkSmartPointer<vtkActor2D>::New();
-  //depthImageActor->SetMapper(depthImageMapper);
-  //depthImageActor->SetPosition(width,0);
+  vtkSmartPointer<vtkActor2D> depthImageActor = vtkSmartPointer<vtkActor2D>::New();
+  depthImageActor->SetMapper(depthImageMapper);
+  depthImageActor->SetPosition(ColorWidth,0);
 
   // Setup renderers
   vtkSmartPointer<vtkRenderer> renderer =
@@ -186,28 +301,38 @@ vtkImageData* GrabNextColorFrame(int numberOfTry)
   vtkSmartPointer<vtkRenderWindow> renderWindow =
     vtkSmartPointer<vtkRenderWindow>::New();
   renderWindow->AddRenderer(renderer);
-  renderWindow->SetSize(width * 2, height);
+  renderWindow->SetSize(ColorWidth + DepthWidth, ColorHeight);
 
-  //renderer->AddViewProp(imageActor);
   renderer->AddActor2D(colorImageActor);
-  //renderer->AddActor2D(depthImageActor);
+  renderer->AddActor2D(depthImageActor);
 
-  vtkNew<vtkImageFlip> flip;
-  flip->SetFilteredAxis(1);
+  vtkNew<vtkImageFlip> flipColor;
+  flipColor->SetFilteredAxis(1);
+
+  vtkNew<vtkImageFlip> flipDepth;
+  flipDepth->SetFilteredAxis(1);
 
   bool capture = true;
   while (capture)
     {
-    if (WAIT_OBJECT_0 == WaitForSingleObject(nextColorFrameEvent, 1))
+    if ( WAIT_OBJECT_0 == WaitForSingleObject(nextColorFrameEvent, 0) )
       {
-      flip->SetInputData(GrabNextColorFrame(5));
-      flip->Update();
-      colorImageMapper->SetInputData(flip->GetOutput());
+      flipColor->SetInputData(GrabNextColorFrame());
+      flipColor->Update();
+      colorImageMapper->SetInputData(flipColor->GetOutput());
 
       renderWindow->Render();
       }
 
-    Sleep(1);
+    if ( WAIT_OBJECT_0 == WaitForSingleObject(nextDepthFrameEvent, 0) )
+      {
+      flipDepth->SetInputData(GrabNextDepthFrame());
+      flipDepth->Update();
+      depthImageMapper->SetInputData(flipDepth->GetOutput());
+
+      renderWindow->Render();
+      }
+
     }
 
   return EXIT_SUCCESS;
