@@ -21,14 +21,19 @@ else()
   include( ${VTK_USE_FILE} )
 endif()
 
+# Bender Dir
+set (Bender_SOURCE_DIR ${PROJECT_SOURCE_DIR})
+add_subdirectory(Libs)
+
 # Include dirs
 include_directories(
   ${PROJECT_BINARY_DIR}
   ${KINECT_INCLUDE_DIRS}
-  ${VTK_INCLUDE_DIR})
+  ${VTK_INCLUDE_DIR}
+  ${BENDER_INCLUDE_DIR})
 
 # Kinect Lib
 set(KINECT_LIB ${KINECT_DIR}/lib/x86/Kinect10.lib) #32 bit windows
 
 add_executable(K main.cxx)
-target_link_libraries(K ${KINECT_LIB} ${VTK_LIBRARIES})
+target_link_libraries(K ${KINECT_LIB} ${VTK_LIBRARIES} ${BENDER_LIBRARIES})

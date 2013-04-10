@@ -34,6 +34,10 @@ unsigned int ColorHeight = 480;
 unsigned int DepthWidth = 320; // resolution could be deduced from kinect frame
 unsigned int DepthHeight = 240;
 
+unsigned int SkeletonWidth = 640; // resolution could be deduced from kinect frame
+unsigned int SkeletonHeight = 480;
+
+
 
 // Kinect variables
 HANDLE rgbStream;              // The identifier of the Kinect's RGB Camera
@@ -95,6 +99,16 @@ bool OpenDepthStream(HANDLE readyEvent)
     &depthStream) == EXIT_SUCCESS;
 }
 
+//-----------------------------------------------------------------------------
+bool OpenSkeletonStream(HANDLE readyEvent)
+{
+  if (!sensor)
+    {
+    return false;
+    }
+
+  return sensor->NuiSkeletonTrackingEnable(readyEvent, 0) != EXIT_SUCCESS;
+}
 
 //-----------------------------------------------------------------------------
 vtkImageData* GrabNextColorFrame()
@@ -241,7 +255,6 @@ vtkImageData* GrabNextDepthFrame()
   return image;
 }
 
-
 //-----------------------------------------------------------------------------
  int main (int argc, char* argv)
  {
@@ -253,10 +266,13 @@ vtkImageData* GrabNextDepthFrame()
     }
 
   // 2- Create Events
-  const int numberOfEvents = 2;
+  const int numberOfEvents = 3;
   HANDLE nextColorFrameEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
   HANDLE nextDepthFrameEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
-  HANDLE events[numberOfEvents] = {nextColorFrameEvent, nextDepthFrameEvent};
+  HANDLE nextSkeletonFrameEvent = CreateEventW(NULL, TRUE, FALSE, NULL);
+  HANDLE events[numberOfEvents] = {nextColorFrameEvent,
+                                   nextDepthFrameEvent,
+                                   nextSkeletonFrameEvent};
 
   // 3- Open RGB stream
   if (!OpenColorStream(nextColorFrameEvent))
@@ -271,6 +287,13 @@ vtkImageData* GrabNextDepthFrame()
     return EXIT_FAILURE;
     }
 
+  if (!OpenSkeletonStream(nextSkeletonFrameEvent))
+    {
+    std::cout<<"Could not Init skeleton Stream"<<std::endl;
+    return EXIT_FAILURE;
+    }
+
+
   // -- VTK Rendering --
 
   // 1- Color
@@ -279,7 +302,8 @@ vtkImageData* GrabNextDepthFrame()
   colorImageMapper->SetColorWindow(255);
   colorImageMapper->SetColorLevel(127.5);
 
-  vtkSmartPointer<vtkActor2D> colorImageActor = vtkSmartPointer<vtkActor2D>::New();
+  vtkSmartPointer<vtkActor2D> colorImageActor =
+    vtkSmartPointer<vtkActor2D>::New();
   colorImageActor->SetMapper(colorImageMapper);
   colorImageActor->SetPosition(0,0);
 
@@ -289,9 +313,21 @@ vtkImageData* GrabNextDepthFrame()
   depthImageMapper->SetColorWindow(255);
   depthImageMapper->SetColorLevel(127.5);
 
-  vtkSmartPointer<vtkActor2D> depthImageActor = vtkSmartPointer<vtkActor2D>::New();
+  vtkSmartPointer<vtkActor2D> depthImageActor =
+    vtkSmartPointer<vtkActor2D>::New();
   depthImageActor->SetMapper(depthImageMapper);
   depthImageActor->SetPosition(ColorWidth,0);
+
+  // 2 -Depth
+  vtkSmartPointer<vtkImageMapper> skeletonImageMapper =
+    vtkSmartPointer<vtkImageMapper>::New();
+  skeletonImageMapper->SetColorWindow(255);
+  skeletonImageMapper->SetColorLevel(127.5);
+
+  vtkSmartPointer<vtkActor2D> skeletonImageActor =
+    vtkSmartPointer<vtkActor2D>::New();
+  skeletonImageActor->SetMapper(depthImageMapper);
+  skeletonImageActor->SetPosition(SkeletonWidth, 0);
 
   // Setup renderers
   vtkSmartPointer<vtkRenderer> renderer =
@@ -301,10 +337,11 @@ vtkImageData* GrabNextDepthFrame()
   vtkSmartPointer<vtkRenderWindow> renderWindow =
     vtkSmartPointer<vtkRenderWindow>::New();
   renderWindow->AddRenderer(renderer);
-  renderWindow->SetSize(ColorWidth + DepthWidth, ColorHeight);
+  renderWindow->SetSize(ColorWidth + DepthWidth + SkeletonWidth, ColorHeight);
 
   renderer->AddActor2D(colorImageActor);
   renderer->AddActor2D(depthImageActor);
+  renderer->AddActor2D(skeletonImageActor);
 
   vtkNew<vtkImageFlip> flipColor;
   flipColor->SetFilteredAxis(1);
@@ -320,6 +357,15 @@ vtkImageData* GrabNextDepthFrame()
       flipColor->SetInputData(GrabNextColorFrame());
       flipColor->Update();
       colorImageMapper->SetInputData(flipColor->GetOutput());
+
+      renderWindow->Render();
+      }
+
+    if ( WAIT_OBJECT_0 == WaitForSingleObject(nextDepthFrameEvent, 0) )
+      {
+      flipDepth->SetInputData(GrabNextDepthFrame());
+      flipDepth->Update();
+      depthImageMapper->SetInputData(flipDepth->GetOutput());
 
       renderWindow->Render();
       }
