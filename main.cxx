@@ -8,6 +8,7 @@
 
 // -- VTK --
 #include <vtkActor2D.h>
+#include <vtkAppendPolyData.h>
 #include <vtkDataObject.h>
 #include <vtkImageData.h>
 #include <vtkImageFlip.h>
@@ -15,16 +16,18 @@
 #include <vtkImageMapper.h>
 #include <vtkImageReslice.h>
 #include <vtkImageWriter.h>
+#include <vtkLineSource.h>
 #include <vtkNew.h>
-#include <vtkRenderer.h>
-#include <vtkRenderWindow.h>
-#include <vtkRenderWindowInteractor.h>
-#include <vtkSmartPointer.h>
 #include <vtkPolyData.h>
 #include <vtkPolyDataMapper.h>
 #include <vtkPolyDataReader.h>
 #include <vtkProperty.h>
 #include <vtkPolyDataWriter.h>
+#include <vtkRenderer.h>
+#include <vtkRenderWindow.h>
+#include <vtkRenderWindowInteractor.h>
+#include <vtkSmartPointer.h>
+#include <vtkTransform.h>
 
 // -- Bender --
 #include "vtkArmatureWidget.h"
@@ -267,8 +270,98 @@ vtkImageData* GrabNextDepthFrame()
   return image;
 }
 
+namespace 
+{
+
+void ApplyTransformToBone(vtkBoneWidget* bone, double displayPos1[2], double displayPos2[2], double dist)
+{
+  //std::cout<<"displayPos1: "<<displayPos1[0]<<" "<<displayPos1[1]<<std::endl;
+  //std::cout<<"displayPos2: "<<displayPos2[0]<<" "<<displayPos2[1]<<std::endl;
+
+  double lineVect[3];
+  lineVect[0] = 0;
+  lineVect[1] = displayPos2[0] - displayPos1[0];
+  lineVect[2] = displayPos2[1] - displayPos1[1];
+  vtkMath::Normalize(lineVect);
+
+  //std::cout<<"Line Vect: "<<lineVect[0]<<" "<<lineVect[1]<<" "<<lineVect[2]<<std::endl;
+
+  double head[3];
+  bone->GetWorldHeadRest(head);
+  double tail[3];
+  
+  //std::cout<<"Tail: "<<tail[0]<<" "<<tail[1]<<" "<<tail[2]<<std::endl;
+
+  vtkMath::MultiplyScalar(lineVect, dist);
+  vtkMath::Add(head, lineVect, tail);
+  
+  //std::cout<<"New Tail: "<<tail[0]<<" "<<tail[1]<<" "<<tail[2]<<std::endl;
+  bone->SetWorldTailRest(tail);
+}
+/*
+ApplyTransformToBone(armature->GetBoneByName("HipLeft"),
+      displayPos[NUI_SKELETON_POSITION_HIP_CENTER],
+      displayPos[NUI_SKELETON_POSITION_HIP_LEFT]);
+    ApplyTransformToBone(armature->GetBoneByName("KneeLeft"),
+      displayPos[NUI_SKELETON_POSITION_HIP_LEFT],
+      displayPos[NUI_SKELETON_POSITION_KNEE_LEFT]);
+    ApplyTransformToBone(armature->GetBoneByName("AnkleLeft"),
+      displayPos[NUI_SKELETON_POSITION_KNEE_LEFT],
+      displayPos[NUI_SKELETON_POSITION_ANKLE_LEFT]);
+
+    ApplyTransformToBone(armature->GetBoneByName("FootLeft"),
+      displayPos[NUI_SKELETON_POSITION_ANKLE_LEFT],
+      displayPos[NUI_SKELETON_POSITION_FOOT_LEFT]);
+    ApplyTransformToBone(armature->GetBoneByName("HipRight"),
+      displayPos[NUI_SKELETON_POSITION_HIP_CENTER],
+      displayPos[NUI_SKELETON_POSITION_HIP_RIGHT]);
+    ApplyTransformToBone(armature->GetBoneByName("KneeRight"),
+      displayPos[NUI_SKELETON_POSITION_HIP_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_KNEE_RIGHT]);
+    ApplyTransformToBone(armature->GetBoneByName("AnkleRight"),
+      displayPos[NUI_SKELETON_POSITION_KNEE_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_ANKLE_RIGHT]);
+    ApplyTransformToBone(armature->GetBoneByName("FootRight"),
+      displayPos[NUI_SKELETON_POSITION_ANKLE_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_FOOT_RIGHT]);
+    ApplyTransformToBone(armature->GetBoneByName("Spine"),
+      displayPos[NUI_SKELETON_POSITION_HIP_CENTER],
+      displayPos[NUI_SKELETON_POSITION_SPINE]);
+    ApplyTransformToBone(armature->GetBoneByName("ShoulderCenter"),
+      displayPos[NUI_SKELETON_POSITION_SPINE],
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_CENTER]);
+    ApplyTransformToBone(armature->GetBoneByName("Head"),
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_CENTER],
+      displayPos[NUI_SKELETON_POSITION_HEAD]);
+    ApplyTransformToBone(armature->GetBoneByName("ShoulderLeft"),
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_CENTER],
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_LEFT]);
+    ApplyTransformToBone(armature->GetBoneByName("ElbowLeft"),
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_LEFT],
+      displayPos[NUI_SKELETON_POSITION_ELBOW_LEFT]);
+    ApplyTransformToBone(armature->GetBoneByName("WristLeft"),
+      displayPos[NUI_SKELETON_POSITION_ELBOW_LEFT],
+      displayPos[NUI_SKELETON_POSITION_WRIST_LEFT]);
+    ApplyTransformToBone(armature->GetBoneByName("HandLeft"),
+      displayPos[NUI_SKELETON_POSITION_WRIST_LEFT],
+      displayPos[NUI_SKELETON_POSITION_HAND_LEFT]);
+    ApplyTransformToBone(armature->GetBoneByName("ShoulderRight"),
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_CENTER],
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_RIGHT]);
+    ApplyTransformToBone(armature->GetBoneByName("ElbowRight"),
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_ELBOW_RIGHT]);
+    ApplyTransformToBone(armature->GetBoneByName("WristRight"),
+      displayPos[NUI_SKELETON_POSITION_ELBOW_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_WRIST_RIGHT]);
+    ApplyTransformToBone(armature->GetBoneByName("HandRight"),
+      displayPos[NUI_SKELETON_POSITION_WRIST_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_HAND_RIGHT]);*/
+}
+
 //-----------------------------------------------------------------------------
-vtkPolyData* GrabNextSkeletonFrame(vtkArmatureWidget* armature)
+//vtkPolyData* GrabNextSkeletonFrame(vtkArmatureWidget* armature)
+vtkPolyData* GrabNextSkeletonFrame(std::string filename)
 {
   NUI_SKELETON_FRAME SkeletonFrame;
   if (NuiSkeletonGetNextFrame(0, &SkeletonFrame) != EXIT_SUCCESS)
@@ -291,16 +384,17 @@ vtkPolyData* GrabNextSkeletonFrame(vtkArmatureWidget* armature)
     return 0;
     }
 
+  vtkArmatureWidget* armature = 0;
   NuiTransformSmooth(&SkeletonFrame, NULL);
-
-  int displayPos[20][2];
   for (int i = 0; i < NUI_SKELETON_COUNT; ++i)
     {
-    if (SkeletonFrame.SkeletonData[i].eTrackingState != NUI_SKELETON_TRACKED)
+    const NUI_SKELETON_DATA& skeletonData = SkeletonFrame.SkeletonData[i];
+    if (skeletonData.eTrackingState != NUI_SKELETON_TRACKED)
       {
       continue;
       }
 
+    double displayPos[20][2];
     for (int j = 0; j < NUI_SKELETON_POSITION_COUNT; ++j)
       {
       float fx, fy;
@@ -310,208 +404,438 @@ vtkPolyData* GrabNextSkeletonFrame(vtkArmatureWidget* armature)
       displayPos[j][1] = (int) (fy * SkeletonHeight + 0.5f);
       }
 
-    armature->GetBoneByName("Root")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_HIP_CENTER][0],
-      displayPos[NUI_SKELETON_POSITION_HIP_CENTER][1],
-      0);
+    vtkNew<vtkPolyDataReader> reader;
+    reader->SetFileName(filename.c_str());
+    reader->Update();
+
+    vtkPolyData* referenceArmature = reader->GetOutput();
+    if (!referenceArmature)
+      {
+      std::cout<<"No Reference armature !"<<std::endl;
+      return 0;
+      }
+
+    vtkPoints* points = referenceArmature->GetPoints();
+    if (!points)
+      {
+      std::cerr<<"Cannot create armature from ref,"
+        <<" No points !"<<std::endl;
+      return 0;
+      }
+
+     armature = vtkArmatureWidget::New();
+
+    double p[3];
+    double p2[3];
+    double d[3];
+    double dist;
+    vtkBoneWidget* Root = armature->CreateBone(NULL, "Root");
+    armature->AddBone(Root, NULL);
+    points->GetPoint(0, p);
+    Root->SetWorldHeadRest(p);
+    points->GetPoint(1, p);
+    Root->SetWorldTailRest(p);
 
     // Left leg
-    armature->GetBoneByName("HipLeft")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_HIP_LEFT][0],
-      displayPos[NUI_SKELETON_POSITION_HIP_LEFT][1],
-      0);
+    vtkBoneWidget* HipLeft = armature->CreateBone(Root, "HipLeft");
+    armature->AddBone(HipLeft, Root);
+    points->GetPoint(3, p);
+    points->GetPoint(2, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    HipLeft->SetWorldTailRest(p);
 
-    armature->GetBoneByName("KneeLeft")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_KNEE_LEFT][0],
-      displayPos[NUI_SKELETON_POSITION_KNEE_LEFT][1],
-      0);
+    ApplyTransformToBone(HipLeft,
+      displayPos[NUI_SKELETON_POSITION_HIP_CENTER],
+      displayPos[NUI_SKELETON_POSITION_HIP_LEFT],
+      dist);
 
-    armature->GetBoneByName("AnkleLeft")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_ANKLE_LEFT][0],
-      displayPos[NUI_SKELETON_POSITION_ANKLE_LEFT][1],
-      0);
+    vtkBoneWidget* KneeLeft = armature->CreateBone(HipLeft, "KneeLeft");
+    armature->AddBone(KneeLeft, HipLeft);
+    points->GetPoint(5, p);
+    points->GetPoint(4, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    KneeLeft->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("KneeLeft"),
+      displayPos[NUI_SKELETON_POSITION_HIP_LEFT],
+      displayPos[NUI_SKELETON_POSITION_KNEE_LEFT],
+      dist);
 
-    armature->GetBoneByName("FootLeft")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_FOOT_LEFT][0],
-      displayPos[NUI_SKELETON_POSITION_FOOT_LEFT][1],
-      0);
+    vtkBoneWidget* AnkleLeft = armature->CreateBone(KneeLeft, "AnkleLeft");
+    armature->AddBone(AnkleLeft, KneeLeft);
+    points->GetPoint(7, p);
+    points->GetPoint(6, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    AnkleLeft->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("AnkleLeft"),
+      displayPos[NUI_SKELETON_POSITION_KNEE_LEFT],
+      displayPos[NUI_SKELETON_POSITION_ANKLE_LEFT],
+      dist);
+
+    vtkBoneWidget* FootLeft = armature->CreateBone(AnkleLeft, "FootLeft");
+    armature->AddBone(FootLeft, AnkleLeft);
+    points->GetPoint(9, p);
+    points->GetPoint(8, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    FootLeft->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("FootLeft"),
+      displayPos[NUI_SKELETON_POSITION_ANKLE_LEFT],
+      displayPos[NUI_SKELETON_POSITION_FOOT_LEFT],
+      dist);
 
     // Right leg
-    armature->GetBoneByName("HipRight")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_HIP_RIGHT][0],
-      displayPos[NUI_SKELETON_POSITION_HIP_RIGHT][1],
-      0);
+    vtkBoneWidget* HipRight = armature->CreateBone(Root, "HipRight");
+    armature->AddBone(HipRight, Root);
+    points->GetPoint(11, p);
+    points->GetPoint(10, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    HipRight->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("HipRight"),
+      displayPos[NUI_SKELETON_POSITION_HIP_CENTER],
+      displayPos[NUI_SKELETON_POSITION_HIP_RIGHT],
+      dist);
 
-    armature->GetBoneByName("KneeRight")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_KNEE_RIGHT][0],
-      displayPos[NUI_SKELETON_POSITION_KNEE_RIGHT][1],
-      0);
+    vtkBoneWidget* KneeRight = armature->CreateBone(HipRight, "KneeRight");
+    armature->AddBone(KneeRight, HipRight);
+    points->GetPoint(13, p);
+    points->GetPoint(12, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    KneeRight->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("KneeRight"),
+      displayPos[NUI_SKELETON_POSITION_HIP_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_KNEE_RIGHT],
+      dist);
 
-    armature->GetBoneByName("AnkleRight")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_ANKLE_RIGHT][0],
-      displayPos[NUI_SKELETON_POSITION_ANKLE_RIGHT][1],
-      0);
+    vtkBoneWidget* AnkleRight = armature->CreateBone(KneeRight, "AnkleRight");
+    armature->AddBone(AnkleRight, KneeRight);
+    points->GetPoint(15, p);
+    points->GetPoint(14, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    AnkleRight->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("AnkleRight"),
+      displayPos[NUI_SKELETON_POSITION_KNEE_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_ANKLE_RIGHT],
+      dist);
 
-    armature->GetBoneByName("FootRight")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_FOOT_RIGHT][0],
-      displayPos[NUI_SKELETON_POSITION_FOOT_RIGHT][1],
-      0);
+    vtkBoneWidget* FootRight = armature->CreateBone(AnkleRight, "FootRight");
+    armature->AddBone(FootRight, AnkleRight);
+    points->GetPoint(17, p);
+    points->GetPoint(16, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    FootRight->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("FootRight"),
+      displayPos[NUI_SKELETON_POSITION_ANKLE_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_FOOT_RIGHT],
+      dist);
 
-    // Spine
-    armature->GetBoneByName("Spine")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_SPINE][0],
-      displayPos[NUI_SKELETON_POSITION_SPINE][1],
-      0);
+    // spine
+    vtkBoneWidget* Spine = armature->CreateBone(Root, "Spine");
+    armature->AddBone(Spine, Root);
+    points->GetPoint(19, p);
+    points->GetPoint(18, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    Spine->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("Spine"),
+      displayPos[NUI_SKELETON_POSITION_HIP_CENTER],
+      displayPos[NUI_SKELETON_POSITION_SPINE],
+      dist);
 
-    armature->GetBoneByName("ShoulderCenter")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_SHOULDER_CENTER][0],
-      displayPos[NUI_SKELETON_POSITION_SHOULDER_CENTER][1],
-      0);
+    vtkBoneWidget* ShoulderCenter = armature->CreateBone(Spine, "ShoulderCenter");
+    armature->AddBone(ShoulderCenter, Spine);
+    points->GetPoint(21, p);
+    points->GetPoint(20, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    ShoulderCenter->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("ShoulderCenter"),
+      displayPos[NUI_SKELETON_POSITION_SPINE],
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_CENTER],
+      dist);
 
-    armature->GetBoneByName("Head")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_HEAD][0],
-      displayPos[NUI_SKELETON_POSITION_HEAD][1],
-      0);
+    vtkBoneWidget* Head = armature->CreateBone(ShoulderCenter, "Head");
+    armature->AddBone(Head, ShoulderCenter);
+    points->GetPoint(23, p);
+    points->GetPoint(22, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    Head->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("Head"),
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_CENTER],
+      displayPos[NUI_SKELETON_POSITION_HEAD],
+      dist);
 
     // Left Arm
-    armature->GetBoneByName("ShoulderLeft")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_SHOULDER_LEFT][0],
-      displayPos[NUI_SKELETON_POSITION_SHOULDER_LEFT][1],
-      0);
+    vtkBoneWidget* ShoulderLeft = armature->CreateBone(ShoulderCenter, "ShoulderLeft");
+    armature->AddBone(ShoulderLeft, ShoulderCenter);
+    points->GetPoint(25, p);
+    points->GetPoint(24, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    ShoulderLeft->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("ShoulderLeft"),
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_CENTER],
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_LEFT],
+      dist);
 
-    armature->GetBoneByName("ElbowLeft")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_ELBOW_LEFT][0],
-      displayPos[NUI_SKELETON_POSITION_ELBOW_LEFT][1],
-      0);
+    vtkBoneWidget* ElbowLeft = armature->CreateBone(ShoulderLeft, "ElbowLeft");
+    armature->AddBone(ElbowLeft, ShoulderLeft);
+    points->GetPoint(27, p);
+    points->GetPoint(26, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    ElbowLeft->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("ElbowLeft"),
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_LEFT],
+      displayPos[NUI_SKELETON_POSITION_ELBOW_LEFT],
+      dist);
 
-    armature->GetBoneByName("WristLeft")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_WRIST_LEFT][0],
-      displayPos[NUI_SKELETON_POSITION_WRIST_LEFT][1],
-      0);
+    vtkBoneWidget* WristLeft = armature->CreateBone(ElbowLeft, "WristLeft");
+    armature->AddBone(WristLeft, ElbowLeft);
+    points->GetPoint(29, p);
+    points->GetPoint(28, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    WristLeft->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("WristLeft"),
+      displayPos[NUI_SKELETON_POSITION_ELBOW_LEFT],
+      displayPos[NUI_SKELETON_POSITION_WRIST_LEFT],
+      dist);
 
-    armature->GetBoneByName("HandLeft")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_HAND_LEFT][0],
-      displayPos[NUI_SKELETON_POSITION_HAND_LEFT][1],
-      0);
+    vtkBoneWidget* HandLeft = armature->CreateBone(WristLeft, "HandLeft");
+    armature->AddBone(HandLeft, WristLeft);
+    points->GetPoint(31, p);
+    points->GetPoint(30, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    HandLeft->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("HandLeft"),
+      displayPos[NUI_SKELETON_POSITION_WRIST_LEFT],
+      displayPos[NUI_SKELETON_POSITION_HAND_LEFT],
+      dist);
 
     // Right Arm
-    armature->GetBoneByName("ShoulderRight")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_SHOULDER_RIGHT][0],
-      displayPos[NUI_SKELETON_POSITION_SHOULDER_RIGHT][1],
-      0);
+    vtkBoneWidget* ShoulderRight = armature->CreateBone(ShoulderCenter, "ShoulderRight");
+    armature->AddBone(ShoulderRight, ShoulderCenter);
+    points->GetPoint(33, p);
+    points->GetPoint(32, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    ShoulderRight->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("ShoulderRight"),
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_CENTER],
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_RIGHT],
+      dist);
 
-    armature->GetBoneByName("ElbowRight")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_ELBOW_RIGHT][0],
-      displayPos[NUI_SKELETON_POSITION_ELBOW_RIGHT][1],
-      0);
+    vtkBoneWidget* ElbowRight = armature->CreateBone(ShoulderRight, "ElbowRight");
+    armature->AddBone(ElbowRight, ShoulderRight);
+    points->GetPoint(35, p);
+    points->GetPoint(34, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    ElbowRight->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("ElbowRight"),
+      displayPos[NUI_SKELETON_POSITION_SHOULDER_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_ELBOW_RIGHT],
+      dist);
 
-    armature->GetBoneByName("WristRight")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_WRIST_RIGHT][0],
-      displayPos[NUI_SKELETON_POSITION_WRIST_RIGHT][1],
-      0);
+    vtkBoneWidget* WristRight = armature->CreateBone(ElbowRight, "WristRight");
+    armature->AddBone(WristRight, ElbowRight);
+    points->GetPoint(37, p);
+    points->GetPoint(36, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    WristRight->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("WristRight"),
+      displayPos[NUI_SKELETON_POSITION_ELBOW_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_WRIST_RIGHT],
+      dist);
 
-    armature->GetBoneByName("HandRight")->SetWorldTailRest(
-      displayPos[NUI_SKELETON_POSITION_HAND_RIGHT][0],
-      displayPos[NUI_SKELETON_POSITION_HAND_RIGHT][1],
-      0);
+    vtkBoneWidget* HandRight = armature->CreateBone(WristRight, "HandRight");
+    armature->AddBone(HandRight, WristRight);
+    points->GetPoint(39, p);
+    points->GetPoint(38, p2);
+    vtkMath::Subtract(p2, p, d);
+    dist = vtkMath::Norm(d);
+    HandRight->SetWorldTailRest(p);
+    ApplyTransformToBone(armature->GetBoneByName("HandRight"),
+      displayPos[NUI_SKELETON_POSITION_WRIST_RIGHT],
+      displayPos[NUI_SKELETON_POSITION_HAND_RIGHT],
+      dist);
+
+
+    // Init pose mode
+    armature->SetWidgetState(vtkArmatureWidget::Pose);
+    armature->SetWidgetState(vtkArmatureWidget::Rest);
 
     break;
     }
-
 
   return armature->GetPolyData();
 }
 
 //-----------------------------------------------------------------------------
-vtkArmatureWidget* CreateKinectArmature()
+vtkArmatureWidget* CreateArmature(std::string& filename)
 {
+  vtkNew<vtkPolyDataReader> reader;
+  reader->SetFileName(filename.c_str());
+  reader->Update();
+
+  vtkPolyData* referenceArmature = reader->GetOutput();
+  if (!referenceArmature)
+    {
+    std::cout<<"No Reference armature !"<<std::endl;
+    return 0;
+    }
+
+  vtkPoints* points = referenceArmature->GetPoints();
+  if (!points)
+    {
+    std::cerr<<"Cannot create armature from ref,"
+      <<" No points !"<<std::endl;
+    return 0;
+    }
+
   vtkArmatureWidget* armature = vtkArmatureWidget::New();
+
+  double p[3];
 
   vtkBoneWidget* Root = armature->CreateBone(NULL, "Root");
   armature->AddBone(Root, NULL);
-  Root->SetWorldHeadRest(0.0, 0.0, 0.0);
-  Root->SetWorldTailRest(0.0, 0.0, 1.0);
+  points->GetPoint(0, p);
+  Root->SetWorldHeadRest(p);
+  points->GetPoint(1, p);
+  Root->SetWorldTailRest(p);
 
   // Left leg
   vtkBoneWidget* HipLeft = armature->CreateBone(Root, "HipLeft");
   armature->AddBone(HipLeft, Root);
-  HipLeft->SetWorldTailRest(1.0, 0.0, 1.0);
+  points->GetPoint(3, p);
+  HipLeft->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(HipLeft, false);
 
   vtkBoneWidget* KneeLeft = armature->CreateBone(HipLeft, "KneeLeft");
   armature->AddBone(KneeLeft, HipLeft);
-  KneeLeft->SetWorldTailRest(1.0, 0.0, -2.0);
+  points->GetPoint(5, p);
+  KneeLeft->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(KneeLeft, false);
 
   vtkBoneWidget* AnkleLeft = armature->CreateBone(KneeLeft, "AnkleLeft");
   armature->AddBone(AnkleLeft, KneeLeft);
-  AnkleLeft->SetWorldTailRest(1.0, 0.0, -4.0);
+  points->GetPoint(7, p);
+  AnkleLeft->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(AnkleLeft, false);
 
   vtkBoneWidget* FootLeft = armature->CreateBone(AnkleLeft, "FootLeft");
   armature->AddBone(FootLeft, AnkleLeft);
-  FootLeft->SetWorldTailRest(1.0, 0.0, -5.0);
+  points->GetPoint(9, p);
+  FootLeft->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(FootLeft, false);
 
   // Right leg
   vtkBoneWidget* HipRight = armature->CreateBone(Root, "HipRight");
   armature->AddBone(HipRight, Root);
-  HipRight->SetWorldTailRest(-1.0, 0.0, 1.0);
+  points->GetPoint(11, p);
+  HipRight->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(HipRight, false);
 
   vtkBoneWidget* KneeRight = armature->CreateBone(HipRight, "KneeRight");
   armature->AddBone(KneeRight, HipRight);
-  KneeRight->SetWorldTailRest(-1.0, 0.0, -2.0);
+  points->GetPoint(13, p);
+  KneeRight->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(KneeRight, false);
 
   vtkBoneWidget* AnkleRight = armature->CreateBone(KneeRight, "AnkleRight");
   armature->AddBone(AnkleRight, KneeRight);
-  AnkleRight->SetWorldTailRest(-1.0, 0.0, -4.0);
+  points->GetPoint(15, p);
+  AnkleRight->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(AnkleRight, false);
 
   vtkBoneWidget* FootRight = armature->CreateBone(AnkleRight, "FootRight");
   armature->AddBone(FootRight, AnkleRight);
-  FootRight->SetWorldTailRest(-1.0, 0.0, -5.0);
+  points->GetPoint(17, p);
+  FootRight->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(FootRight, false);
 
   // spine
   vtkBoneWidget* Spine = armature->CreateBone(Root, "Spine");
   armature->AddBone(Spine, Root);
-  Spine->SetWorldTailRest(0.0, 0.0, 2.0);
+  points->GetPoint(19, p);
+  Spine->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(Spine, false);
 
   vtkBoneWidget* ShoulderCenter = armature->CreateBone(Spine, "ShoulderCenter");
   armature->AddBone(ShoulderCenter, Spine);
-  ShoulderCenter->SetWorldTailRest(0.0, 0.0, 6.0);
+  points->GetPoint(21, p);
+  ShoulderCenter->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(ShoulderCenter, false);
 
   vtkBoneWidget* Head = armature->CreateBone(ShoulderCenter, "Head");
   armature->AddBone(Head, ShoulderCenter);
-  Head->SetWorldTailRest(0.0, 0.0, 7.0);
+  points->GetPoint(23, p);
+  Head->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(Head, false);
 
   // Left Arm
   vtkBoneWidget* ShoulderLeft = armature->CreateBone(ShoulderCenter, "ShoulderLeft");
   armature->AddBone(ShoulderLeft, ShoulderCenter);
-  ShoulderLeft->SetWorldTailRest(1.0, 0.0, 6.0);
+  points->GetPoint(25, p);
+  ShoulderLeft->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(ShoulderLeft, false);
 
   vtkBoneWidget* ElbowLeft = armature->CreateBone(ShoulderLeft, "ElbowLeft");
   armature->AddBone(ElbowLeft, ShoulderLeft);
-  ElbowLeft->SetWorldTailRest(1.0, 0.0, 4.0);
+  points->GetPoint(27, p);
+  ElbowLeft->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(ElbowLeft, false);
 
   vtkBoneWidget* WristLeft = armature->CreateBone(ElbowLeft, "WristLeft");
   armature->AddBone(WristLeft, ElbowLeft);
-  WristLeft->SetWorldTailRest(1.0, 0.0, 2.0);
+  points->GetPoint(29, p);
+  WristLeft->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(WristLeft, false);
 
   vtkBoneWidget* HandLeft = armature->CreateBone(WristLeft, "HandLeft");
   armature->AddBone(HandLeft, WristLeft);
-  HandLeft->SetWorldTailRest(1.0, 0.0, 1.0);
+  points->GetPoint(31, p);
+  HandLeft->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(HandLeft, false);
 
   // Left Arm
   vtkBoneWidget* ShoulderRight = armature->CreateBone(ShoulderCenter, "ShoulderRight");
   armature->AddBone(ShoulderRight, ShoulderCenter);
-  ShoulderRight->SetWorldTailRest(-1.0, 0.0, 6.0);
+  points->GetPoint(33, p);
+  ShoulderRight->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(ShoulderRight, false);
 
   vtkBoneWidget* ElbowRight = armature->CreateBone(ShoulderRight, "ElbowRight");
   armature->AddBone(ElbowRight, ShoulderRight);
-  ElbowRight->SetWorldTailRest(-1.0, 0.0, 4.0);
+  points->GetPoint(35, p);
+  ElbowRight->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(ElbowRight, false);
 
   vtkBoneWidget* WristRight = armature->CreateBone(ElbowRight, "WristRight");
   armature->AddBone(WristRight, ElbowRight);
-  WristRight->SetWorldTailRest(-1.0, 0.0, 2.0);
+  points->GetPoint(37, p);
+  WristRight->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(WristRight, false);
 
   vtkBoneWidget* HandRight = armature->CreateBone(WristRight, "HandRight");
   armature->AddBone(HandRight, WristRight);
-  HandRight->SetWorldTailRest(-1.0, 0.0, 1.0);
+  points->GetPoint(39, p);
+  HandRight->SetWorldTailRest(p);
+  armature->SetBoneLinkedWithParent(HandRight, false);
+
+  // Init pose mode
+  armature->SetWidgetState(vtkArmatureWidget::Pose);
+  armature->SetWidgetState(vtkArmatureWidget::Rest);
 
   return armature;
 }
@@ -554,7 +878,13 @@ vtkArmatureWidget* CreateKinectArmature()
     return EXIT_FAILURE;
     }
 
-  vtkSmartPointer<vtkArmatureWidget> armature = CreateKinectArmature();
+  std::string filename = "W:/Jungle/Kinect/K_Bender/Armature.vtk";
+  vtkSmartPointer<vtkArmatureWidget> armature = CreateArmature(filename);
+
+  vtkNew<vtkPolyDataWriter> w;
+  w->SetFileName("W:/Jungle/Kinect/ArmatureTest.vtk");
+  w->SetInputData(armature->GetPolyData());
+  w->Write();
 
   // -- VTK Rendering --
 
@@ -586,6 +916,15 @@ vtkArmatureWidget* CreateKinectArmature()
   skeletonImageMapper->SetColorWindow(255);
   skeletonImageMapper->SetColorLevel(127.5);
 
+  /**/
+  vtkSmartPointer<vtkPolyDataMapper> sMapper =
+    vtkSmartPointer<vtkPolyDataMapper>::New();
+
+  vtkSmartPointer<vtkActor> sActor =
+    vtkSmartPointer<vtkActor>::New();
+  sActor->SetMapper(sMapper);
+  /**/
+
   // Setup renderers
   vtkSmartPointer<vtkRenderer> renderer =
     vtkSmartPointer<vtkRenderer>::New();
@@ -594,44 +933,35 @@ vtkArmatureWidget* CreateKinectArmature()
   vtkSmartPointer<vtkRenderWindow> renderWindow =
     vtkSmartPointer<vtkRenderWindow>::New();
   renderWindow->AddRenderer(renderer);
-  /*renderWindow->SetSize(ColorWidth + DepthWidth + SkeletonWidth, ColorHeight);
+  renderWindow->SetSize(ColorWidth + DepthWidth, ColorHeight);
 
   renderer->AddActor2D(colorImageActor);
   renderer->AddActor2D(depthImageActor);
+  renderer->AddActor(sActor);
 
   vtkNew<vtkImageFlip> flipColor;
   flipColor->SetFilteredAxis(1);
 
   vtkNew<vtkImageFlip> flipDepth;
-  flipDepth->SetFilteredAxis(1);*/
+  flipDepth->SetFilteredAxis(1);
+
 
 
   // -- Armature Rendering --
-  vtkNew<vtkPolyDataWriter> w;
-  w->SetFileName("W:/Bender/Data/A.vtk");
-
-  vtkSmartPointer<vtkPolyDataMapper> armatureMapper =
-    vtkSmartPointer<vtkPolyDataMapper>::New();
-
-  vtkSmartPointer<vtkActor> armatureActor =
-    vtkSmartPointer<vtkActor>::New();
-  armatureActor->SetMapper(armatureMapper);
-  armatureActor->GetProperty()->SetColor(1.0, 0.0, 0.0); 
-  armatureActor->SetOrigin(ColorWidth + DepthWidth + SkeletonWidth /2 , SkeletonHeight / 2, 0);
+  w->SetFileName("W:/Jungle/Kinect/Pose.vtk");
 
   // -- Event Loop --
 
   bool capture = true;
   while (capture)
     {
-    /*if ( WAIT_OBJECT_0 == WaitForSingleObject(nextColorFrameEvent, 0) )
+    if ( WAIT_OBJECT_0 == WaitForSingleObject(nextColorFrameEvent, 0) )
       {
       flipColor->SetInputData(GrabNextColorFrame());
       flipColor->Update();
       colorImageMapper->SetInputData(flipColor->GetOutput());
 
       renderWindow->Render();
-      //armatureRenderWindow->Render();
       }
 
     if ( WAIT_OBJECT_0 == WaitForSingleObject(nextDepthFrameEvent, 0) )
@@ -641,16 +971,19 @@ vtkArmatureWidget* CreateKinectArmature()
       depthImageMapper->SetInputData(flipDepth->GetOutput());
 
       renderWindow->Render();
-      //armatureRenderWindow->Render();
-      }*/
+      }
 
     if ( WAIT_OBJECT_0 == WaitForSingleObject(nextSkeletonFrameEvent, 0) )
       {
       std::cout<<"Grabbing armature"<<std::endl;
-      w->SetInputData(GrabNextSkeletonFrame(armature));
-      w->Write();
+      vtkPolyData* newArmature = GrabNextSkeletonFrame( filename );
+      if (newArmature)
+        {
+        w->SetInputData(newArmature);
+        w->Write();
 
-      std::cout<<"Wrote !"<<std::endl;
+        std::cout<<"Wrote !"<<std::endl;
+        }
       }
 
     Sleep(500);
