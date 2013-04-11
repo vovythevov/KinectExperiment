@@ -23,11 +23,13 @@
 #include <vtkPolyDataReader.h>
 #include <vtkProperty.h>
 #include <vtkPolyDataWriter.h>
+#include <vtkPNGWriter.h>
 #include <vtkRenderer.h>
 #include <vtkRenderWindow.h>
 #include <vtkRenderWindowInteractor.h>
 #include <vtkSmartPointer.h>
 #include <vtkTransform.h>
+#include <vtkWindowToImageFilter.h>
 
 // -- Bender --
 #include "vtkArmatureWidget.h"
@@ -945,10 +947,10 @@ vtkArmatureWidget* CreateArmature(std::string& filename)
   vtkNew<vtkImageFlip> flipDepth;
   flipDepth->SetFilteredAxis(1);
 
-
-
   // -- Armature Rendering --
   w->SetFileName("W:/Jungle/Kinect/Pose.vtk");
+
+
 
   // -- Event Loop --
 
@@ -983,6 +985,21 @@ vtkArmatureWidget* CreateArmature(std::string& filename)
         w->Write();
 
         std::cout<<"Wrote !"<<std::endl;
+
+        renderWindow->Render();
+
+        vtkSmartPointer<vtkWindowToImageFilter> windowToImageFilter = 
+        vtkSmartPointer<vtkWindowToImageFilter>::New();
+        windowToImageFilter->SetInputBufferTypeToRGBA(); //also record the alpha (transparency) channel
+        windowToImageFilter->SetInput(renderWindow);
+
+        vtkSmartPointer<vtkPNGWriter> writer = 
+          vtkSmartPointer<vtkPNGWriter>::New();
+        windowToImageFilter->Update();
+        writer->SetInputConnection(windowToImageFilter->GetOutputPort());
+        writer->SetFileName("W:/Jungle/Kinect/KinectVovythevov.png");
+        writer->Write();
+
         }
       }
 
