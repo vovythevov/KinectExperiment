@@ -999,6 +999,24 @@ void vtkBoneWidget::RotateTailWXYZ(double angle, double x, double y, double z)
 }
 
 //----------------------------------------------------------------------------
+void vtkBoneWidget::RotateTailWXYZ(vtkTransform* rotation)
+{
+  if (!rotation)
+    {
+    return;
+    }
+
+  double wxyz[4];
+  rotation->GetOrientationWXYZ(wxyz);
+  double axis[3];
+  double angle = vtkMath::RadiansFromDegrees(wxyz[0]);
+  axis[0] = wxyz[1];
+  axis[1] = wxyz[2];
+  axis[2] = wxyz[3];
+  this->RotateTailWXYZ(angle, axis);
+}
+
+//----------------------------------------------------------------------------
 void vtkBoneWidget::RotateTailWXYZ(double angle, double axis[3])
 {
   double newTail[3];

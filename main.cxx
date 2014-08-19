@@ -160,8 +160,13 @@ vtkImageData* GrabNextColorFrame()
       for (int rgb = 0; rgb < 3; ++rgb)
         {
         pixel[rgb] = *kinectImage;
+
         ++kinectImage;
         }
+
+      unsigned char c = pixel[0];
+      pixel[0] = pixel[2];
+      pixel[2] = c;
 
       ++kinectImage;
       }
@@ -655,7 +660,7 @@ vtkPolyData* GrabNextSkeletonFrame(std::string filename)
     vtkMath::Subtract(p2, p, d);
     dist = vtkMath::Norm(d);
     WristRight->SetWorldTailRest(p);
-    ApplyTransformToBone(armature->GetBoneByName("WristRight"),
+   ApplyTransformToBone(armature->GetBoneByName("WristRight"),
       displayPos[NUI_SKELETON_POSITION_ELBOW_RIGHT],
       displayPos[NUI_SKELETON_POSITION_WRIST_RIGHT],
       dist);
@@ -973,9 +978,23 @@ vtkArmatureWidget* CreateArmature(std::string& filename)
       depthImageMapper->SetInputData(flipDepth->GetOutput());
 
       renderWindow->Render();
+
+      vtkSmartPointer<vtkWindowToImageFilter> windowToImageFilter = 
+        vtkSmartPointer<vtkWindowToImageFilter>::New();
+        windowToImageFilter->SetInputBufferTypeToRGBA(); //also record the alpha (transparency) channel
+        windowToImageFilter->SetInput(renderWindow);
+
+        vtkSmartPointer<vtkPNGWriter> writer = 
+          vtkSmartPointer<vtkPNGWriter>::New();
+        windowToImageFilter->Update();
+        writer->SetInputConnection(windowToImageFilter->GetOutputPort());
+        writer->SetFileName("W:/Jungle/Kinect/NotDetectedBob.png");
+        writer->Write();
+        
+      Sleep(10000);
       }
 
-    if ( WAIT_OBJECT_0 == WaitForSingleObject(nextSkeletonFrameEvent, 0) )
+    /*if ( WAIT_OBJECT_0 == WaitForSingleObject(nextSkeletonFrameEvent, 0) )
       {
       std::cout<<"Grabbing armature"<<std::endl;
       vtkPolyData* newArmature = GrabNextSkeletonFrame( filename );
@@ -1000,10 +1019,9 @@ vtkArmatureWidget* CreateArmature(std::string& filename)
         writer->SetFileName("W:/Jungle/Kinect/KinectVovythevov.png");
         writer->Write();
 
+      Sleep(1000);
         }
-      }
-
-    Sleep(500);
+      }*/
 
     }
 

@@ -373,7 +373,8 @@ public:
   void RotateTailY(double angle);
   void RotateTailZ(double angle);
   void RotateTailWXYZ(double angle, double x, double y, double z);
-  void RotateTailWXYZ(double angle, double axis[3]); //TO CHECK !
+  void RotateTailWXYZ(double angle, double axis[3]);
+  void RotateTailWXYZ(vtkTransform* rotation); //TO CHECK !
 
   // Description
   // Show/Hide the link between a child's head an its parent origin.
